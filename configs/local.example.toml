@@ -1,0 +1,6 @@
+[paths]
+superni_metadata_repo = "C:\\Users\\<YOUR_NAME>\\datasets\\natural-instructions-meta"
+output_root = "C:\\Users\\<YOUR_NAME>\\fed_learn\\outputs"
+hf_home = ""
+model_cache_dir = ""
+

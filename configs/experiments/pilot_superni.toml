@@ -1,0 +1,19 @@
+name = "pilot_superni_qwen"
+dataset_name = "Muennighoff/natural-instructions"
+benchmark_name = "google/IFEval"
+selected_task_count = 12
+samples_per_task = 6000
+train_split = 0.70
+validation_split = 0.10
+test_split = 0.20
+num_clients = 30
+rounds = 30
+local_epochs = 3
+token_budget_per_client = 4000
+participation_fractions = [0.3, 1.0]
+aggregation_methods = ["fedavg", "fedprox", "scaffold"]
+heterogeneity_levels = ["mild", "medium", "hard"]
+peft_methods = ["lora", "soft_prompt"]
+pilot_seeds = [7]
+full_seeds = [7, 21, 42]
+

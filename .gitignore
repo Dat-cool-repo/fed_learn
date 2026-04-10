@@ -13,3 +13,5 @@ wandb/
 *.pyc
 *.pyo
 *.pyd
+
+.env

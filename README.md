@@ -1,51 +1,37 @@
 # Federated PEFT Research Project
 
-This repository is organized for the empirical phase of the CIS4930 research project on
-drift-corrected federated instruction tuning with PEFT.
+This repository is currently focused on the model-side scaffold for federated PEFT
+experiments.
 
-## Layout
+## Current Layout
 
 ```text
 fed_learn/
-  configs/              Experiment, model, and local path configuration files
-  data/                 Local manifests and dataset notes
-  docs/                 Setup notes and project documentation
-  outputs/              Generated results, logs, and artifacts
-  scripts/              Smoke tests and utility scripts
-  src/fed_learn/        Main project package
-  tests/                Unit and integration tests
+  configs/                    Shared model and local path configuration files
+  docs/                       Notes and timeline references
+  scripts/show_model_setup.py Model-only dry-run and load example
+  src/fed_learn/              Model config, loading, and PEFT state utilities
 ```
 
-## Current starting point
+## Model Scaffold
 
-- `configs/experiments/pilot_superni.toml` captures the first experiment defaults.
-- `configs/models/qwen_1_5b_instruct.toml` captures the temporary base model setup.
-- `scripts/check_setup.py` validates dataset, metadata-path, and tokenizer access.
-- `scripts/show_pilot_plan.py` prints the proposal-backed pilot plan.
-- The team is using `Qwen/Qwen2.5-1.5B-Instruct` as the temporary base model.
+- `configs/models/qwen_1_5b_instruct.toml` defines the temporary base model and PEFT settings.
+- `src/fed_learn/config.py` loads typed config objects from TOML files.
+- `src/fed_learn/modeling.py` loads the tokenizer/base model and attaches `LoRA` or
+  `soft_prompt`.
+- `src/fed_learn/peft_state.py` extracts, reloads, and averages trainable PEFT tensors.
+- `scripts/show_model_setup.py` demonstrates the intended model workflow before wiring in
+  data or local training.
 
-## Local machine setup
-
-Copy `configs/local.example.toml` to `configs/local.toml` and fill in your machine-specific
-paths. Large assets stay outside the repo, for example:
-
-- SuperNI metadata: `C:\Users\<name>\datasets\natural-instructions-meta`
-- Hugging Face cache: default cache or a custom external directory
-- Output artifacts: inside `outputs/` or another non-versioned folder
-
-## Useful commands
+## Useful Commands
 
 ```powershell
-python scripts/show_pilot_plan.py
-python scripts/check_superni_access.py
-python scripts/build_superni_catalog.py
-python scripts/show_data_setup.py
-python scripts/check_setup.py --skip-model
-python scripts/check_setup.py
+python scripts/show_model_setup.py --peft-method lora
+python scripts/show_model_setup.py --peft-method soft_prompt
+python scripts/show_model_setup.py --peft-method lora --load
 ```
 
-## Immediate next steps
+## Next Step
 
-1. Build the local SuperNI catalog from the metadata repo.
-2. Fill `data/manifests/pilot_superni_tasks.csv` with the first 10-12 pilot tasks.
-3. Define mild, medium, and hard client mixtures from those task types.
+Add the first local training loop around the model scaffold so client-side updates can be
+plugged into `FedAvg`, `FedProx`, and `SCAFFOLD`.

@@ -38,12 +38,14 @@ paths. Large assets stay outside the repo, for example:
 ```powershell
 python scripts/show_pilot_plan.py
 python scripts/check_superni_access.py
+python scripts/build_superni_catalog.py
+python scripts/show_data_setup.py
 python scripts/check_setup.py --skip-model
 python scripts/check_setup.py
 ```
 
 ## Immediate next steps
 
-1. Choose the initial SuperNI task subset.
-2. Define mild, medium, and hard client mixtures.
-3. Build the dataset catalog and client partitioning code.
+1. Build the local SuperNI catalog from the metadata repo.
+2. Fill `data/manifests/pilot_superni_tasks.csv` with the first 10-12 pilot tasks.
+3. Define mild, medium, and hard client mixtures from those task types.

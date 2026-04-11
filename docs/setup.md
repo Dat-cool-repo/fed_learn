@@ -23,6 +23,8 @@ Verify SuperNI access:
 
 ```powershell
 python scripts/check_superni_access.py
+python scripts/build_superni_catalog.py
+python scripts/show_data_setup.py
 ```
 
 Create local path config:
@@ -54,3 +56,4 @@ Setup is ready when each teammate can confirm:
 3. The metadata repo exists outside the project.
 4. The Qwen tokenizer loads without error.
 5. `python scripts/show_pilot_plan.py` prints the shared pilot defaults.
+6. `python scripts/build_superni_catalog.py` creates the local SuperNI catalog.

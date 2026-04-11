@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+./scripts/check_setup.py
+./scripts/check_superni_access.py
+./scripts/show_pilot_plan.py
+fed_learn.egg-info/PKG-INFO
+fed_learn.egg-info/SOURCES.txt
+fed_learn.egg-info/dependency_links.txt
+fed_learn.egg-info/top_level.txt

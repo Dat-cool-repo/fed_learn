@@ -1,0 +1,34 @@
+WHAT METRICS ARE STORED
+-Round numbers (for indexing)
+-Rouge-L per round (one score per round) (calculated on global model)
+    -Calculated using rouge_score library
+    -Create a scorer using rouge_Scorer.RougeScorer()
+    -Calculate score like so:
+        score = scorer.score(ideal, actual)
+    -Score each sample on global model, then average scores across all samples each round
+-Update norms per round (one score per client per round)
+    -measures magnitude of drift each round
+    -calculated as below
+        client_update = local_model_weights - global_model_weights
+        update_norm = np.linalg.norm(flatten(client_update))  # L2 norm
+    -calculated after local model updates weights, but before global model updates weights
+-Cosine disagreement per round (one score per client per round)
+
+    -calculated as below
+        def cosine_similarity(u, v):
+            return dot(u, v) / (norm(u) * norm(v))
+        cosine_disagreement = 1 - cosine_similarity(client_update, global_update)
+
+
+Hyper-parameters:
+2 participation levels
+2 seeds
+2 non-IID heterogeneity levels
+3 aggregation methods
+-fedAvg
+-fedProx
+-SCAFFOLD
+2 PEFT methods
+-LORA
+-soft-prompting
+    

@@ -11,7 +11,7 @@ USAGE (3 steps):
 EXAMPLE:
     from metrics_writer import MetricsWriter
 
-    logger = MetricsWriter(seed=1, regime="mild", method="fedavg", peft="lora")
+    logger = MetricsWriter(regime="mild", method="fedavg", peft="lora")
 
     for round_num in range(1, num_rounds + 1):
         # ... your federated training round ...
@@ -23,7 +23,7 @@ EXAMPLE:
             cosine_disagree = [0.21,  0.18,  0.25],    # list[float]: one per participating client
         )
 
-    logger.save()   # writes results/seed_1/regime_mild/method_fedavg/peft_lora/metrics.json
+    logger.save()   # writes results/regime_mild/method_fedavg/peft_lora/metrics.json
 
 That's it. The file is written automatically to the right folder.
 """
@@ -46,7 +46,6 @@ class MetricsWriter:
 
     Parameters
     ----------
-    seed    : int   — random seed for this run  (1, 2, or 3)
     regime  : str   — heterogeneity level        ("mild", "medium", "hard")
     method  : str   — aggregation algorithm      ("fedavg", "fedprox", "scaffold")
     peft    : str   — PEFT technique             ("lora", "softprompt")
@@ -54,30 +53,26 @@ class MetricsWriter:
     """
 
     VALID = {
-        "seed":   {1, 2},
         "regime": {"mild", "hard"},
         "method": {"fedavg", "fedprox", "scaffold"},
-        "peft":   {"lora", "softprompt"},
+        "peft":   {"fft", "lora", "softprompt"},
     }
 
     def __init__(
         self,
-        seed:   int,
         regime: str,
         method: str,
         peft:   str,
         root:   Path = RESULTS_ROOT,
     ):
-        self._validate(seed, regime, method, peft)
+        self._validate(regime, method, peft)
 
-        self.seed   = seed
         self.regime = regime
         self.method = method
         self.peft   = peft
 
         self.out_path: Path = (
             root
-            / f"seed_{seed}"
             / f"regime_{regime}"
             / f"method_{method}"
             / f"peft_{peft}"
@@ -183,10 +178,8 @@ class MetricsWriter:
     # ── Private ───────────────────────────────────────────────────────────────
 
     @classmethod
-    def _validate(cls, seed, regime, method, peft):
+    def _validate(cls, regime, method, peft):
         errors = []
-        if seed not in cls.VALID["seed"]:
-            errors.append(f"seed={seed!r} must be one of {cls.VALID['seed']}")
         if regime not in cls.VALID["regime"]:
             errors.append(f"regime={regime!r} must be one of {cls.VALID['regime']}")
         if method not in cls.VALID["method"]:
@@ -197,7 +190,7 @@ class MetricsWriter:
             raise ValueError("MetricsWriter config error:\n  " + "\n  ".join(errors))
 
 
-# ── Drift helpers (mirror of 03_analysis.ipynb, usable from training code) ──
+# ── Drift helpers ──
 
 def _flatten(delta_w: dict) -> np.ndarray:
     """Flatten a param dict → 1-D numpy array. Handles torch tensors."""
@@ -261,9 +254,9 @@ def _compute_drift_metrics(
 def create_all_writers(root: Path = RESULTS_ROOT) -> dict:
     """
     Pre-create MetricsWriter objects for all 54 experiment configurations
-    (3 seeds × 3 regimes × 3 methods × 2 PEFT).
+    (3 regimes × 3 methods × 2 PEFT).
 
-    Returns a dict keyed by (seed, regime, method, peft) tuples.
+    Returns a dict keyed by (regime, method, peft) tuples.
 
     Usage:
         writers = create_all_writers()
@@ -273,16 +266,15 @@ def create_all_writers(root: Path = RESULTS_ROOT) -> dict:
     """
     from itertools import product
     writers = {}
-    for seed, regime, method, peft in product(
-        [1, 2, 3],
+    for regime, method, peft in product(
         ["mild", "medium", "hard"],
         ["fedavg", "fedprox", "scaffold"],
-        ["lora", "softprompt"],
+        ["fft", "lora", "softprompt"],
     ):
-        writers[(seed, regime, method, peft)] = MetricsWriter(
-            seed, regime, method, peft, root=root
+        writers[(regime, method, peft)] = MetricsWriter(
+            regime, method, peft, root=root
         )
-    print(f"✅ Created {len(writers)} MetricsWriter objects.")
+    print(f"Created {len(writers)} MetricsWriter objects.")
     return writers
 
 
@@ -295,10 +287,10 @@ if __name__ == "__main__":
     print("metrics_writer.py — smoke test")
     print("=" * 60)
 
-    tmp = Path(tempfile.mkdtemp()) / "results"
+    tmp = RESULTS_ROOT#Path(tempfile.mkdtemp()) / "results"
 
     # Test 1: basic API
-    logger = MetricsWriter(seed=1, regime="mild", method="fedavg", peft="lora", root=tmp)
+    logger = MetricsWriter(regime="mild", method="fedavg", peft="lora", root=tmp)
     for t in range(1, 6):
         logger.log_round(
             round_num       = t,
@@ -322,18 +314,18 @@ if __name__ == "__main__":
         {"lora_A": rng.normal(0, 0.01, (8, 64)), "lora_B": rng.normal(0, 0.01, (64, 8))}
         for _ in range(4)
     ]
-    logger2 = MetricsWriter(seed=2, regime="hard", method="scaffold", peft="lora", root=tmp)
+    logger2 = MetricsWriter(regime="hard", method="scaffold", peft="lora", root=tmp)
     logger2.log_round_from_state_dicts(round_num=1, rouge_l=0.22,
                                        client_deltas=deltas, global_weights={})
     logger2.save()
-    print("✅ Test 2 passed: log_round_from_state_dicts")
+    print("Test 2 passed: log_round_from_state_dicts")
 
     # Test 3: validation
     try:
-        MetricsWriter(seed=99, regime="mild", method="fedavg", peft="lora", root=tmp)
+        MetricsWriter(regime="unknown", method="fedavg", peft="lora", root=tmp)
         assert False, "Should have raised"
     except ValueError as e:
         print(f"Test 3 passed: validation caught bad seed — {e}")
 
-    shutil.rmtree(tmp.parent)
+    #shutil.rmtree(tmp.parent)
     print("\nAll smoke tests passed.")

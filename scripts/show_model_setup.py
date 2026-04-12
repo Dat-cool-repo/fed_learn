@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model-config",
         type=Path,
-        default=REPO_ROOT / "configs" / "models" / "qwen_1_5b_instruct.toml",
+        default=REPO_ROOT / "configs" / "models" / "qwen_0_5b_instruct.toml",
         help="Path to the shared model config.",
     )
     parser.add_argument(

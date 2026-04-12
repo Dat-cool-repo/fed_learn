@@ -6,12 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "fed-learn"
 version = "0.1.0"
 description = "Federated PEFT experiment scaffolding for the CIS4930 empirical project."
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = []
 
 [tool.setuptools]
-package-dir = {"" = "."}
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 

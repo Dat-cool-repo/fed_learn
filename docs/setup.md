@@ -39,12 +39,15 @@ Then edit `configs\local.toml` with the correct metadata path for your machine.
 
 Use Qwen for the current setup:
 
-- `Qwen/Qwen2.5-1.5B-Instruct`
+- default: `Qwen/Qwen2.5-0.5B-Instruct`
+- backup/heavier option: `Qwen/Qwen2.5-1.5B-Instruct`
 
 Verify tokenizer access:
 
 ```powershell
-python scripts/check_setup.py
+python scripts/show_model_setup.py --peft-method lora
+python scripts/show_model_setup.py --peft-method lora --load
+python scripts/run_local_client_train.py --peft-method lora --max-steps 2
 ```
 
 ## Completion checklist
@@ -55,5 +58,6 @@ Setup is ready when each teammate can confirm:
 2. SuperNI streaming loads successfully.
 3. The metadata repo exists outside the project.
 4. The Qwen tokenizer loads without error.
-5. `python scripts/show_pilot_plan.py` prints the shared pilot defaults.
-6. `python scripts/build_superni_catalog.py` creates the local SuperNI catalog.
+5. `python scripts/show_model_setup.py --peft-method lora` prints the shared model defaults.
+6. `python scripts/show_model_setup.py --peft-method lora --load` successfully loads the reduced Qwen stack.
+7. `python scripts/run_local_client_train.py --peft-method lora --max-steps 2` can train one simulated client from CSV input.

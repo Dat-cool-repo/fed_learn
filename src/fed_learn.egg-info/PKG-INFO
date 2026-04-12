@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: fed-learn
+Version: 0.1.0
+Summary: Federated PEFT experiment scaffolding for the CIS4930 empirical project.
+Requires-Python: >=3.11

@@ -68,6 +68,50 @@ def average_trainable_states(
     return averaged_state
 
 
+def clone_trainable_state(state: dict[str, Any], *, to_cpu: bool = True) -> dict[str, Any]:
+    cloned: dict[str, Any] = {}
+    for name, tensor in state.items():
+        new_tensor = tensor.detach().clone()
+        if to_cpu:
+            new_tensor = new_tensor.cpu()
+        cloned[name] = new_tensor
+    return cloned
+
+
+def zero_like_trainable_state(state: dict[str, Any], *, to_cpu: bool = True) -> dict[str, Any]:
+    zeros: dict[str, Any] = {}
+    for name, tensor in state.items():
+        new_tensor = tensor.detach().clone().zero_()
+        if to_cpu:
+            new_tensor = new_tensor.cpu()
+        zeros[name] = new_tensor
+    return zeros
+
+
+def add_trainable_states(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    _validate_state_keys([left, right])
+    return {key: left[key].clone().add_(right[key]) for key in left}
+
+
+def subtract_trainable_states(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    _validate_state_keys([left, right])
+    return {key: left[key].clone().sub_(right[key]) for key in left}
+
+
+def scale_trainable_state(state: dict[str, Any], factor: float) -> dict[str, Any]:
+    return {key: tensor.clone().mul_(factor) for key, tensor in state.items()}
+
+
+def trainable_state_l2_norm(state: dict[str, Any]) -> float:
+    torch_module = _require_torch()
+    if not state:
+        return 0.0
+    accumulator = torch_module.tensor(0.0)
+    for tensor in state.values():
+        accumulator = accumulator + tensor.detach().float().pow(2).sum()
+    return float(torch_module.sqrt(accumulator).cpu())
+
+
 def render_trainable_state_summary(state: dict[str, Any]) -> str:
     total_scalars = sum(int(tensor.numel()) for tensor in state.values())
     lines = [

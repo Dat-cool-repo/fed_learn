@@ -77,8 +77,11 @@ def load_base_causal_lm(model_config: ModelConfig, *, cache_dir: Path | None = N
 
 def attach_peft_adapter(base_model: Any, model_config: ModelConfig, peft_method: str) -> Any:
     normalized_method = peft_method.strip().lower()
-    peft_module = _require_dependency("peft")
+    if normalized_method == "fft":
+        base_model.requires_grad_(True)
+        return base_model
 
+    peft_module = _require_dependency("peft")
     base_model.requires_grad_(False)
     if normalized_method == "lora":
         peft_config = _build_lora_config(peft_module, model_config.lora)

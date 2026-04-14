@@ -46,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the client assignment CSV (only if not using --db-path).",
     )
     parser.add_argument("--aggregation-method", choices=["fedavg", "fedprox", "scaffold"], required=True)
-    parser.add_argument("--peft-method", choices=["lora", "soft_prompt"], required=True)
+    parser.add_argument("--peft-method", choices=["fft", "lora", "soft_prompt"], required=True)
     parser.add_argument("--heterogeneity-level", required=True)
     parser.add_argument("--participation-fraction", type=float, default=0.3)
     parser.add_argument("--seed", type=int, default=7)

@@ -37,9 +37,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--peft-method",
-        choices=["lora", "soft_prompt"],
+        choices=["fft", "lora", "soft_prompt"],
         default="lora",
-        help="Which PEFT branch to attach to the frozen base model.",
+        help="Which adaptation branch to attach. Use fft for full fine-tuning.",
     )
     parser.add_argument(
         "--load",

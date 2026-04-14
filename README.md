@@ -21,8 +21,8 @@ fed_learn/
 - `configs/experiments/pilot_superni.toml` now reflects the reduced pilot:
   `5 tasks`, `15 clients`, `10 rounds`, `1 seed`, `2 heterogeneity levels`.
 - `src/fed_learn/config.py` loads typed config objects from TOML files.
-- `src/fed_learn/modeling.py` loads the tokenizer/base model and attaches `LoRA` or
-  `soft_prompt`.
+- `src/fed_learn/modeling.py` loads the tokenizer/base model and configures `fft`,
+  `LoRA`, or `soft_prompt`.
 - `src/fed_learn/data_pipeline.py` loads standardized CSV examples, joins client
   assignments, and tokenizes prompt/target pairs for Qwen causal-LM training.
 - `src/fed_learn/local_train.py` runs a single local client training loop over the
@@ -30,7 +30,8 @@ fed_learn/
 - `src/fed_learn/federated.py` simulates federated rounds, client sampling, `FedAvg`,
   `FedProx`, `SCAFFOLD`, per-round evaluation, JSONL logging, metrics export, and
   checkpoint snapshots for later expensive evaluation.
-- `src/fed_learn/peft_state.py` extracts, reloads, and averages trainable PEFT tensors.
+- `src/fed_learn/peft_state.py` extracts, reloads, and averages whichever trainable
+  tensors the selected adaptation method exposes.
 - `scripts/show_model_setup.py` demonstrates the model workflow.
 - `scripts/run_local_client_train.py` smoke-tests one client from CSV input through a
   local optimizer step loop.
@@ -41,11 +42,12 @@ fed_learn/
 
 ```powershell
 python scripts/show_model_setup.py --peft-method lora
+python scripts/show_model_setup.py --peft-method fft
 python scripts/show_model_setup.py --peft-method soft_prompt
 python scripts/show_model_setup.py --peft-method lora --load
 python scripts/run_local_client_train.py --peft-method lora --max-steps 2
 python scripts/repartition_sqlite_clients.py --clients-per-group 3
-python scripts/run_federated_simulation.py --aggregation-method fedavg --peft-method lora --heterogeneity-level low
+python scripts/run_federated_simulation.py --aggregation-method fedavg --peft-method fft --heterogeneity-level low
 python scripts/run_experiment_grid.py
 ```
 

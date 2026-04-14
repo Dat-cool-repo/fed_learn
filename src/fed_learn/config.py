@@ -66,8 +66,10 @@ class ModelConfig:
     lora: LoraTuningConfig
     soft_prompt: SoftPromptTuningConfig
 
-    def get_peft_config(self, peft_method: str) -> LoraTuningConfig | SoftPromptTuningConfig:
+    def get_peft_config(self, peft_method: str) -> LoraTuningConfig | SoftPromptTuningConfig | None:
         normalized = peft_method.strip().lower()
+        if normalized == "fft":
+            return None
         if normalized == "lora":
             return self.lora
         if normalized == "soft_prompt":

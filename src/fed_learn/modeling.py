@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import random
 from typing import Any
 
 from .config import LoraTuningConfig, ModelConfig, SoftPromptTuningConfig
@@ -77,8 +78,11 @@ def load_base_causal_lm(model_config: ModelConfig, *, cache_dir: Path | None = N
 
 def attach_peft_adapter(base_model: Any, model_config: ModelConfig, peft_method: str) -> Any:
     normalized_method = peft_method.strip().lower()
-    peft_module = _require_dependency("peft")
+    if normalized_method == "fft":
+        base_model.requires_grad_(True)
+        return base_model
 
+    peft_module = _require_dependency("peft")
     base_model.requires_grad_(False)
     if normalized_method == "lora":
         peft_config = _build_lora_config(peft_module, model_config.lora)
@@ -109,6 +113,30 @@ def build_model_bundle(
         trainable_parameter_count=trainable_parameter_count,
         total_parameter_count=total_parameter_count,
     )
+
+
+def seed_runtime(seed: int) -> None:
+    """Seed the Python/NumPy/Torch RNGs used by adapter init and training."""
+    random.seed(seed)
+
+    try:
+        import numpy as np  # type: ignore
+
+        np.random.seed(seed)
+    except ImportError:
+        pass
+
+    try:
+        torch_module = _require_dependency("torch")
+    except ImportError:
+        return
+
+    torch_module.manual_seed(seed)
+    if hasattr(torch_module, "cuda") and torch_module.cuda.is_available():
+        torch_module.cuda.manual_seed_all(seed)
+    if hasattr(torch_module, "backends") and hasattr(torch_module.backends, "cudnn"):
+        torch_module.backends.cudnn.deterministic = True
+        torch_module.backends.cudnn.benchmark = False
 
 
 def count_parameters(model: Any) -> tuple[int, int]:

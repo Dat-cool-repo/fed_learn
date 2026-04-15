@@ -19,7 +19,7 @@ from .data_pipeline import (
 )
 from .evaluation import EvaluationResult, evaluate_client_loaders
 from .local_train import LocalTrainConfig, LocalTrainResult, train_local_client
-from .modeling import ModelBundle, build_model_bundle
+from .modeling import ModelBundle, build_model_bundle, seed_runtime
 from .peft_state import (
     add_trainable_states,
     average_trainable_states,
@@ -168,6 +168,8 @@ def run_federated_simulation(
     checkpoint_path: Path | None = None,
     snapshot_dir: Path | None = None,
 ) -> FederatedRunResult:
+    seed_runtime(run_config.seed)
+
     if model_bundle is None or model_bundle.peft_method != run_config.peft_method:
         cache_dir = local_paths.preferred_cache_dir()
         model_bundle = build_model_bundle(
@@ -364,17 +366,8 @@ def run_experiment_grid(
     output_root: Path | None = None,
 ) -> list[FederatedRunResult]:
     results: list[FederatedRunResult] = []
-    model_bundle_cache: dict[str, ModelBundle] = {}
     sorted_configs = sorted(run_configs, key=lambda c: c.peft_method)
     for run_config in sorted_configs:
-        if run_config.peft_method not in model_bundle_cache:
-            cache_dir = local_paths.preferred_cache_dir()
-            model_bundle_cache[run_config.peft_method] = build_model_bundle(
-                model_config,
-                peft_method=run_config.peft_method,
-                cache_dir=cache_dir,
-            )
-        cached_bundle = model_bundle_cache[run_config.peft_method]
         assignments_path = None
         if assignments_template is not None:
             assignments_path = Path(assignments_template.format(heterogeneity=run_config.heterogeneity_level))
@@ -397,7 +390,6 @@ def run_experiment_grid(
             db_path=db_path,
             log_path=log_path,
             metrics_path=metrics_path,
-            model_bundle=cached_bundle,
             checkpoint_path=ckpt_path,
             snapshot_dir=snapshot_dir,
         )

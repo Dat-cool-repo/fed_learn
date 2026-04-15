@@ -117,7 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="+",
         default=None,
         metavar="METHOD",
-        help="Only run these PEFT methods (e.g. lora soft_prompt).",
+        help="Only run these adaptation methods (e.g. fft lora soft_prompt).",
     )
     filter_group.add_argument(
         "--only-aggregation",

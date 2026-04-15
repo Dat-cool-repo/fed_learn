@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import random
 from typing import Any
 
 from .config import LoraTuningConfig, ModelConfig, SoftPromptTuningConfig
@@ -112,6 +113,30 @@ def build_model_bundle(
         trainable_parameter_count=trainable_parameter_count,
         total_parameter_count=total_parameter_count,
     )
+
+
+def seed_runtime(seed: int) -> None:
+    """Seed the Python/NumPy/Torch RNGs used by adapter init and training."""
+    random.seed(seed)
+
+    try:
+        import numpy as np  # type: ignore
+
+        np.random.seed(seed)
+    except ImportError:
+        pass
+
+    try:
+        torch_module = _require_dependency("torch")
+    except ImportError:
+        return
+
+    torch_module.manual_seed(seed)
+    if hasattr(torch_module, "cuda") and torch_module.cuda.is_available():
+        torch_module.cuda.manual_seed_all(seed)
+    if hasattr(torch_module, "backends") and hasattr(torch_module.backends, "cudnn"):
+        torch_module.backends.cudnn.deterministic = True
+        torch_module.backends.cudnn.benchmark = False
 
 
 def count_parameters(model: Any) -> tuple[int, int]:

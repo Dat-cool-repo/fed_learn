@@ -50,9 +50,9 @@ class CheckpointEvalResult:
     round_index: int
     checkpoint_kind: str
     checkpoint_path: str
-    example_count: int
-    batch_count: int
-    mean_loss: float
+    example_count: int | None
+    batch_count: int | None
+    mean_loss: float | None
     rouge_l: float | None
     generated_example_count: int
 
@@ -134,6 +134,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional cap on the number of evaluation examples per run (useful for smoke tests).",
     )
     parser.add_argument(
+        "--latest-only",
+        action="store_true",
+        help="Evaluate only the newest available checkpoint for each run.",
+    )
+    parser.add_argument(
+        "--rouge-only",
+        action="store_true",
+        help="Skip the loss pass and compute only generation-based ROUGE-L.",
+    )
+    parser.add_argument(
         "--skip-rouge",
         action="store_true",
         help="Skip generation-based ROUGE-L and only compute loss.",
@@ -153,6 +163,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
+    if args.rouge_only and args.skip_rouge:
+        raise SystemExit("Choose at most one of --rouge-only and --skip-rouge.")
 
     run_dirs = _resolve_run_dirs(args)
     examples, assignments = _load_examples_and_assignments(args)
@@ -194,7 +206,10 @@ def main() -> int:
             shuffle=False,
         )
 
-        checkpoint_sources = _discover_checkpoint_sources(run_dir)
+        checkpoint_sources = _discover_checkpoint_sources(
+            run_dir,
+            latest_only=args.latest_only,
+        )
         if not checkpoint_sources:
             raise SystemExit(f"No checkpoints were found under {run_dir}.")
 
@@ -209,11 +224,19 @@ def main() -> int:
         for source in checkpoint_sources:
             checkpoint = _load_checkpoint(source.path)
             load_trainable_state(model_bundle.model, checkpoint["global_state"])
-            loss_result = evaluate_client_loaders(
-                model_bundle.model,
-                eval_loaders,
-                max_batches_per_client=None,
-            )
+
+            example_count = None
+            batch_count = None
+            mean_loss = None
+            if not args.rouge_only:
+                loss_result = evaluate_client_loaders(
+                    model_bundle.model,
+                    eval_loaders,
+                    max_batches_per_client=None,
+                )
+                example_count = loss_result.example_count
+                batch_count = loss_result.batch_count
+                mean_loss = loss_result.mean_loss
 
             rouge_l = None
             generated_example_count = 0
@@ -238,18 +261,19 @@ def main() -> int:
                 round_index=source.round_index,
                 checkpoint_kind=source.checkpoint_kind,
                 checkpoint_path=str(source.path.relative_to(run_dir)),
-                example_count=loss_result.example_count,
-                batch_count=loss_result.batch_count,
-                mean_loss=loss_result.mean_loss,
+                example_count=example_count,
+                batch_count=batch_count,
+                mean_loss=mean_loss,
                 rouge_l=rouge_l,
                 generated_example_count=generated_example_count,
             )
             run_results.append(result)
 
+            loss_label = "skipped" if mean_loss is None else f"{mean_loss:.4f}"
             rouge_label = "skipped" if rouge_l is None else f"{rouge_l:.4f}"
             print(
                 f"  Round {result.round_index:>2} ({result.checkpoint_kind:<8})  "
-                f"loss={result.mean_loss:.4f}  rouge_l={rouge_label}"
+                f"loss={loss_label}  rouge_l={rouge_label}"
             )
 
         output_path = _write_checkpoint_eval_file(
@@ -332,7 +356,11 @@ def _load_run_metadata(run_dir: Path) -> dict[str, Any]:
     return payload
 
 
-def _discover_checkpoint_sources(run_dir: Path) -> list[CheckpointSource]:
+def _discover_checkpoint_sources(
+    run_dir: Path,
+    *,
+    latest_only: bool = False,
+) -> list[CheckpointSource]:
     sources_by_round: dict[int, CheckpointSource] = {}
     snapshot_dir = run_dir / "checkpoints"
 
@@ -360,7 +388,10 @@ def _discover_checkpoint_sources(run_dir: Path) -> list[CheckpointSource]:
             ),
         )
 
-    return [sources_by_round[round_index] for round_index in sorted(sources_by_round)]
+    ordered_sources = [sources_by_round[round_index] for round_index in sorted(sources_by_round)]
+    if latest_only and ordered_sources:
+        return [ordered_sources[-1]]
+    return ordered_sources
 
 
 def _load_checkpoint(path: Path) -> dict[str, Any]:

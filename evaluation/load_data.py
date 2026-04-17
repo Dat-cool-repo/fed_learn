@@ -26,6 +26,9 @@ def runs_to_dataframe(runs):
             update_vals = run["update_norms_per_round"][i]
             cos_vals = run["cosine_disagreement_per_round"][i]
 
+            # Add ROUGE-L score to data
+            rouge_val = run["rouge_l_per_round"][i]
+
             row = {
                 "run_name": run["run_name"],
                 "aggregation_method": run["aggregation_method"],
@@ -37,7 +40,7 @@ def runs_to_dataframe(runs):
 
                 "train_loss": run["train_loss_per_round"][i],
                 "val_loss": run["validation_loss_per_round"][i],
-                "rouge_l": run["rouge_l_per_round"][i],
+                "rouge_l": rouge_val,
 
                 "update_norm_mean": np.mean(update_vals),
                 
@@ -54,15 +57,16 @@ def print_all_run_names(runs):
 
     for run in runs:
         key = (
+            run["seed"],
             run["aggregation_method"],
             run["peft_method"],
             run["heterogeneity_level"],
             run["participation_fraction"],
-            run["seed"]
         )
         groups[key].append(run["run_name"])
 
     print("--- RUNS LOADED ---")
 
-    for key in sorted(groups.keys(), key=lambda k: k[4]):
-        print(f"\n{key}")
+    for key in sorted(groups.keys(), key=lambda k: (k[0], k[1], k[2], k[3])):
+        for run_name in groups[key]:
+            print(f"  {run_name}")

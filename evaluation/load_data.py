@@ -1,18 +1,16 @@
-import os
 import json
 import numpy as np
 from collections import defaultdict
+from pathlib import Path
 
 def load_experiment_folder(folder_path):
     data = []
+    root = Path(folder_path)
 
-    for filename in os.listdir(folder_path):
-        if filename.endswith(".json"):
-            filepath = os.path.join(folder_path, filename)
-
-            with open(filepath, "r") as f:
-                run_data = json.load(f)
-                data.append(run_data)
+    for filepath in sorted(root.rglob("metrics.json")):
+        with filepath.open("r", encoding="utf-8") as f:
+            run_data = json.load(f)
+            data.append(run_data)
 
     return data
 

@@ -139,6 +139,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Evaluate only the newest available checkpoint for each run.",
     )
     parser.add_argument(
+        "--include-base-model",
+        action="store_true",
+        help="Evaluate the untuned base model in addition to any checkpoints.",
+    )
+    parser.add_argument(
+        "--base-model-only",
+        action="store_true",
+        help="Evaluate only the untuned base model and skip checkpoint loading.",
+    )
+    parser.add_argument(
         "--rouge-only",
         action="store_true",
         help="Skip the loss pass and compute only generation-based ROUGE-L.",
@@ -165,12 +175,15 @@ def main() -> int:
     args = build_parser().parse_args()
     if args.rouge_only and args.skip_rouge:
         raise SystemExit("Choose at most one of --rouge-only and --skip-rouge.")
+    if args.base_model_only:
+        args.include_base_model = True
 
     run_dirs = _resolve_run_dirs(args)
     examples, assignments = _load_examples_and_assignments(args)
     local_paths = load_local_paths(args.local_config, missing_ok=True)
     cache_dir = local_paths.preferred_cache_dir()
     model_config = load_model_config(args.model_config)
+    shared_base_model_bundle = None
 
     for run_dir in run_dirs:
         metadata = _load_run_metadata(run_dir)
@@ -188,16 +201,31 @@ def main() -> int:
                 f"for run directory {run_dir}."
             )
 
-        seed_runtime(int(metadata["seed"]))
-        model_bundle = build_model_bundle(
-            model_config,
-            peft_method=metadata["peft_method"],
-            cache_dir=cache_dir,
-        )
         grouped_examples = group_examples_by_client(eval_examples)
+        if args.include_base_model and shared_base_model_bundle is None:
+            shared_base_model_bundle = build_model_bundle(
+                model_config,
+                peft_method="fft",
+                cache_dir=cache_dir,
+            )
+
+        model_bundle = None
+        eval_tokenizer = shared_base_model_bundle.tokenizer if shared_base_model_bundle is not None else None
+        if not args.base_model_only:
+            seed_runtime(int(metadata["seed"]))
+            model_bundle = build_model_bundle(
+                model_config,
+                peft_method=metadata["peft_method"],
+                cache_dir=cache_dir,
+            )
+            eval_tokenizer = model_bundle.tokenizer
+
+        if eval_tokenizer is None:
+            raise SystemExit("Could not determine a tokenizer for evaluation.")
+
         eval_loaders = build_client_dataloaders(
             grouped_examples,
-            tokenizer=model_bundle.tokenizer,
+            tokenizer=eval_tokenizer,
             tokenization_config=TokenizationConfig(
                 max_prompt_tokens=args.max_prompt_tokens,
                 max_target_tokens=args.max_target_tokens,
@@ -206,75 +234,62 @@ def main() -> int:
             shuffle=False,
         )
 
-        checkpoint_sources = _discover_checkpoint_sources(
-            run_dir,
-            latest_only=args.latest_only,
-        )
-        if not checkpoint_sources:
+        checkpoint_sources: list[CheckpointSource] = []
+        if not args.base_model_only:
+            checkpoint_sources = _discover_checkpoint_sources(
+                run_dir,
+                latest_only=args.latest_only,
+            )
+        if not checkpoint_sources and not args.include_base_model:
             raise SystemExit(f"No checkpoints were found under {run_dir}.")
 
         print()
         print(f"Run: {metadata['run_name']}")
         print(
-            f"Evaluating {len(checkpoint_sources)} checkpoint(s) on split={args.split!r} "
+            f"Evaluating {len(checkpoint_sources) + (1 if args.include_base_model else 0)} source(s) on split={args.split!r} "
             f"with {len(eval_examples)} example(s)."
         )
 
         run_results: list[CheckpointEvalResult] = []
+        if args.include_base_model:
+            base_result = _evaluate_loaded_model(
+                model=shared_base_model_bundle.model,
+                tokenizer=shared_base_model_bundle.tokenizer,
+                eval_loaders=eval_loaders,
+                eval_examples=eval_examples,
+                metadata=metadata,
+                split=args.split,
+                checkpoint_kind="base",
+                checkpoint_path="<base_model>",
+                round_index=0,
+                rouge_only=args.rouge_only,
+                skip_rouge=args.skip_rouge,
+                max_prompt_tokens=args.max_prompt_tokens,
+                max_target_tokens=args.max_target_tokens,
+            )
+            run_results.append(base_result)
+            _print_eval_result(base_result)
+
         for source in checkpoint_sources:
             checkpoint = _load_checkpoint(source.path)
             load_trainable_state(model_bundle.model, checkpoint["global_state"])
-
-            example_count = None
-            batch_count = None
-            mean_loss = None
-            if not args.rouge_only:
-                loss_result = evaluate_client_loaders(
-                    model_bundle.model,
-                    eval_loaders,
-                    max_batches_per_client=None,
-                )
-                example_count = loss_result.example_count
-                batch_count = loss_result.batch_count
-                mean_loss = loss_result.mean_loss
-
-            rouge_l = None
-            generated_example_count = 0
-            if not args.skip_rouge:
-                rouge_l = evaluate_rouge_l(
-                    model_bundle.model,
-                    model_bundle.tokenizer,
-                    eval_examples,
-                    max_prompt_tokens=args.max_prompt_tokens,
-                    max_new_tokens=args.max_target_tokens,
-                )
-                generated_example_count = len(eval_examples)
-
-            result = CheckpointEvalResult(
-                run_name=metadata["run_name"],
-                aggregation_method=metadata["aggregation_method"],
-                peft_method=metadata["peft_method"],
-                heterogeneity_level=metadata["heterogeneity_level"],
-                participation_fraction=float(metadata["participation_fraction"]),
-                seed=int(metadata["seed"]),
+            result = _evaluate_loaded_model(
+                model=model_bundle.model,
+                tokenizer=model_bundle.tokenizer,
+                eval_loaders=eval_loaders,
+                eval_examples=eval_examples,
+                metadata=metadata,
                 split=args.split,
-                round_index=source.round_index,
                 checkpoint_kind=source.checkpoint_kind,
                 checkpoint_path=str(source.path.relative_to(run_dir)),
-                example_count=example_count,
-                batch_count=batch_count,
-                mean_loss=mean_loss,
-                rouge_l=rouge_l,
-                generated_example_count=generated_example_count,
+                round_index=source.round_index,
+                rouge_only=args.rouge_only,
+                skip_rouge=args.skip_rouge,
+                max_prompt_tokens=args.max_prompt_tokens,
+                max_target_tokens=args.max_target_tokens,
             )
             run_results.append(result)
-
-            loss_label = "skipped" if mean_loss is None else f"{mean_loss:.4f}"
-            rouge_label = "skipped" if rouge_l is None else f"{rouge_l:.4f}"
-            print(
-                f"  Round {result.round_index:>2} ({result.checkpoint_kind:<8})  "
-                f"loss={loss_label}  rouge_l={rouge_label}"
-            )
+            _print_eval_result(result)
 
         output_path = _write_checkpoint_eval_file(
             run_dir,
@@ -402,6 +417,76 @@ def _load_checkpoint(path: Path) -> dict[str, Any]:
     if "global_state" not in checkpoint or "round_index" not in checkpoint:
         raise KeyError(f"Checkpoint at {path} is missing required keys.")
     return checkpoint
+
+
+def _evaluate_loaded_model(
+    *,
+    model: Any,
+    tokenizer: Any,
+    eval_loaders: dict[str, Any],
+    eval_examples: list[ClientExample],
+    metadata: dict[str, Any],
+    split: str,
+    checkpoint_kind: str,
+    checkpoint_path: str,
+    round_index: int,
+    rouge_only: bool,
+    skip_rouge: bool,
+    max_prompt_tokens: int,
+    max_target_tokens: int,
+) -> CheckpointEvalResult:
+    example_count = None
+    batch_count = None
+    mean_loss = None
+    if not rouge_only:
+        loss_result = evaluate_client_loaders(
+            model,
+            eval_loaders,
+            max_batches_per_client=None,
+        )
+        example_count = loss_result.example_count
+        batch_count = loss_result.batch_count
+        mean_loss = loss_result.mean_loss
+
+    rouge_l = None
+    generated_example_count = 0
+    if not skip_rouge:
+        rouge_l = evaluate_rouge_l(
+            model,
+            tokenizer,
+            eval_examples,
+            max_prompt_tokens=max_prompt_tokens,
+            max_new_tokens=max_target_tokens,
+        )
+        generated_example_count = len(eval_examples)
+
+    return CheckpointEvalResult(
+        run_name=metadata["run_name"],
+        aggregation_method=metadata["aggregation_method"],
+        peft_method=metadata["peft_method"],
+        heterogeneity_level=metadata["heterogeneity_level"],
+        participation_fraction=float(metadata["participation_fraction"]),
+        seed=int(metadata["seed"]),
+        split=split,
+        round_index=round_index,
+        checkpoint_kind=checkpoint_kind,
+        checkpoint_path=checkpoint_path,
+        example_count=example_count,
+        batch_count=batch_count,
+        mean_loss=mean_loss,
+        rouge_l=rouge_l,
+        generated_example_count=generated_example_count,
+    )
+
+
+def _print_eval_result(result: CheckpointEvalResult) -> None:
+    loss_label = "skipped" if result.mean_loss is None else f"{result.mean_loss:.4f}"
+    rouge_label = "skipped" if result.rouge_l is None else f"{result.rouge_l:.4f}"
+    round_label = "base" if result.checkpoint_kind == "base" else f"{result.round_index:>2}"
+    print(
+        f"  Round {round_label} ({result.checkpoint_kind:<8})  "
+        f"loss={loss_label}  rouge_l={rouge_label}"
+    )
 
 
 def evaluate_rouge_l(
